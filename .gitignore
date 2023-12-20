@@ -1,3 +1,5 @@
+*.code-workspace
+.ipynb_checkpoints/
 *.jl.*.cov
 *.jl.cov
 *.jl.mem
