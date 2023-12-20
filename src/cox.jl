@@ -58,6 +58,7 @@ mutable struct COXVariables{T,A}
     t::A # timestamps, must be in nonincreasing order
     breslow::A
     σ::T # step size. 1/(2 * opnorm(X)^2) for guaranteed convergence.
+    σ_min::Real
     grad::A
     w::A
     W::A
@@ -66,8 +67,11 @@ mutable struct COXVariables{T,A}
     obj_prev::Real
     function COXVariables{T,AT}(X::MapOrMatrix, δ::AbstractVector,
                                 t::AbstractVector, penalty::Penalty;
-                                σ::Real=1/(2*power(X; ArrayType=AT)^2), eval_obj::Bool=false
+                                σ::Real=1,
+                                eval_obj::Bool=false
                                ) where {T <: Real, AT <: AbstractArray}
+
+        σ_min = 1/(2*power(X; ArrayType=AT)^2)
         m, n = size(X)
         β = AT{T}(undef, n)
         β_prev = AT{T}(undef, n)
@@ -83,7 +87,7 @@ mutable struct COXVariables{T,A}
         W = AT{T}(undef, m)
         q = AT{T}(undef, m)
 
-        new{T,AT}(m, n, LinearMap(X), penalty, β, β_prev, δ, t, breslow, σ, grad, w, W, q, eval_obj, -Inf)
+        new{T,AT}(m, n, LinearMap(X), penalty, β, β_prev, δ, t, breslow, σ, σ_min, grad, w, W, q, eval_obj, -Inf)
     end
 end
 
@@ -177,11 +181,11 @@ function get_objective!(u::COXUpdate, v::COXVariables{T,A}) where {T,A}
     if v.eval_obj
         v.w .= exp.(mul!(v.w, v.X, v.β))
         cumsum!(v.q, v.w) # q used as dummy
-        #v.W .= v.q[v.breslow]
+        # v.W .= v.q[v.breslow]
         gather!(v.W, v.q, v.breslow)
-        obj = (dot(v.δ, mul!(v.q, v.X, v.β) .- log.(v.W))) ./ size(v.X, 1) .- value(v.penalty, v.β) #v.λ .* sum(abs.(v.β))
+        obj = (dot(v.δ, mul!(v.q, v.X, v.β) .- log.(v.W))) / size(v.X, 1) .- value(v.penalty, v.β) #v.λ .* sum(abs.(v.β))
         reldiff = (abs(obj - v.obj_prev))/(abs(obj) + one(T))
-        converged =  reldiff < u.tol
+        converged = reldiff < u.tol || v.σ < v.σ_min
         v.obj_prev = obj
         return converged, (obj, reldiff, nnz)
     else
@@ -197,11 +201,54 @@ end
 
 Update one iteration of proximal gradient of the Cox regression
 """
-function one_iter!(v::COXVariables)
-    copyto!(v.β_prev, v.β)
+function one_iter!(u::COXUpdate, v::COXVariables)
+    # println(1/(2*power(v.X)^2))
+    # if v.σ < 1/(2*power(v.X)^2)
+    #     return
+    # end
+    
+    shrinkage = 0.75
+    converged, monitor_prev = get_objective!(u, v)
+    g_x = monitor_prev[1] + value(v.penalty, v.β)
+    obj_prev = v.obj_prev
+    copyto!(v.β_prev, v.β) # v.beta_prev = v.beta
+    
     grad!(v)
+    grad_prev = similar(v.grad)
+    copyto!(grad_prev, v.grad)
+    
     prox!(v.β, v.penalty, v.β .+ v.σ .* v.grad)
-    #v.β .= soft_threshold.(v.β .+ v.σ .* v.grad, v.λ)
+    # v.β .=  soft_threshold.(v.β .+ v.σ .* v.grad, lambda)
+    
+    while true
+        converged, monitor = get_objective!(u, v)
+        # g_x = monitor[1] + value(v.penalty, v.β)
+        # g(x+) = g(x) + grad(x)⋅(x+ - x) + 1/(2*v.σ) * norm(x+ - x)^2
+        g_x_plus = monitor[1] + value(v.penalty, v.β) - dot(grad_prev, (v.β .- v.β_prev)) / size(v.β, 1) - 1/(2*v.σ) * norm(v.β .- v.β_prev)^2 / size(v.β, 1)
+        
+        println("[running] g(x+) = $(g_x_plus), g(x) = $(g_x), stepsize: $(v.σ)")
+        println("[running] dot = $(dot(grad_prev, (v.β .- v.β_prev))), norm = $(1/(2*v.σ) * norm(v.β .- v.β_prev)^2)")
+        if g_x_plus > g_x # g(x_plus) is good value
+            println("[stop] g(x+) = $(g_x_plus), g(x) = $(g_x), stepsize: $(v.σ)")
+            break
+        else # step size is too large
+            v.σ *= shrinkage
+            copyto!(v.β, v.β_prev)
+            grad!(v)
+            prox!(v.β, v.penalty, v.β .+ v.σ .* v.grad)
+            # v.β .= soft_threshold.(v.β .+ v.σ .* v.grad, lambda)
+        end
+        # if monitor[1] < monitor_prev[1]
+        #     step_size *= shrinkage
+        #     if step_size < v.σ / 100
+        #         copyto!(v.β, β_best)
+        #         break
+        #     end
+        # else # ok
+        #     break
+    end
+    v.obj_prev = obj_prev
+    # v.β .= soft_threshold.(v.β .+ v.σ .* v.grad, v.λ)
 end
 
 
@@ -211,6 +258,7 @@ end
 Run full Cox regression
 """
 function fit!(u::COXUpdate, v::COXVariables)
+    # println("v.σ = $(v.σ)")
     loop!(u, one_iter!, get_objective!, v)
 end
 

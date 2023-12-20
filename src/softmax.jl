@@ -104,7 +104,7 @@ grad!(v::SoftmaxVariables{T,A}) where {T,A} = softmax_grad!(v.grad, v.β, v.X, v
 
 Computes the objective function
 """
-function get_objective!(v::SoftmaxVariables{T,A}) where {T,A}
+function get_objective!(u::SoftmaxUpdate, v::SoftmaxVariables{T,A}) where {T,A}
     v.grad .= (v.β .!= 0) # grad used as dummy
     nnz = sum(v.grad)
 
@@ -124,7 +124,7 @@ end
 
 Update one iteration of proximal gradient of the Cox regression
 """
-function one_iter!(v::SoftmaxVariables)
+function one_iter!(u::SoftmaxUpdate, v::SoftmaxVariables)
     copyto!(v.β_prev, v.β)
     grad!(v)
     prox!(v.β, v.penalty, v.β .+ v.σ .* v.grad)

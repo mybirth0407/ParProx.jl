@@ -152,7 +152,7 @@ end
 
 Update one iteration of proximal gradient of the Cox regression
 """
-function one_iter!(v::LogisticVariables)
+function one_iter!(u::LogisticUpdate, v::LogisticVariables)
     copyto!(v.β_prev, v.β)
     grad!(v)
     prox!(v.β, v.penalty, v.β .+ v.σ .* v.grad)

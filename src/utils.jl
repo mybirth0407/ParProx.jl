@@ -47,7 +47,7 @@ function loop!(u, iterfun, evalfun, args...)
     t = 0
     while !converged && t < u.maxiter
         t += 1
-        iterfun(args...)
+        iterfun(u, args...)
         if t % u.step == 0
             converged, monitor = evalfun(u, args...)
             if u.verbose
