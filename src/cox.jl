@@ -209,7 +209,8 @@ function one_iter!(u::COXUpdate, v::COXVariables)
     
     shrinkage = 0.75
     converged, monitor_prev = get_objective!(u, v)
-    g_x = monitor_prev[1] + value(v.penalty, v.β)
+    # monitor_prev[1]: objective function value befor updated parameters
+    g_x = monitor_prev[1] + value(v.penalty, v.β) # value: groupnorm penalty
     obj_prev = v.obj_prev
     copyto!(v.β_prev, v.β) # v.beta_prev = v.beta
     
@@ -222,14 +223,9 @@ function one_iter!(u::COXUpdate, v::COXVariables)
     
     while true
         converged, monitor = get_objective!(u, v)
-        # g_x = monitor[1] + value(v.penalty, v.β)
-        # g(x+) = g(x) + grad(x)⋅(x+ - x) + 1/(2*v.σ) * norm(x+ - x)^2
-        g_x_plus = monitor[1] + value(v.penalty, v.β) - dot(grad_prev, (v.β .- v.β_prev)) / size(v.β, 1) - 1/(2*v.σ) * norm(v.β .- v.β_prev)^2 / size(v.β, 1)
+        g_x_plus = monitor[1] + value(v.penalty, v.β) - dot(grad_prev, (v.β .- v.β_prev)) / size(v.β, 1) - 1/(2*v.σ) * norm(v.β .- v.β_prev)^2 / size(v.β, 1) # monitor[1]: objective function value
         
-        println("[running] g(x+) = $(g_x_plus), g(x) = $(g_x), stepsize: $(v.σ)")
-        println("[running] dot = $(dot(grad_prev, (v.β .- v.β_prev))), norm = $(1/(2*v.σ) * norm(v.β .- v.β_prev)^2)")
         if g_x_plus > g_x # g(x_plus) is good value
-            println("[stop] g(x+) = $(g_x_plus), g(x) = $(g_x), stepsize: $(v.σ)")
             break
         else # step size is too large
             v.σ *= shrinkage
@@ -238,17 +234,8 @@ function one_iter!(u::COXUpdate, v::COXVariables)
             prox!(v.β, v.penalty, v.β .+ v.σ .* v.grad)
             # v.β .= soft_threshold.(v.β .+ v.σ .* v.grad, lambda)
         end
-        # if monitor[1] < monitor_prev[1]
-        #     step_size *= shrinkage
-        #     if step_size < v.σ / 100
-        #         copyto!(v.β, β_best)
-        #         break
-        #     end
-        # else # ok
-        #     break
     end
     v.obj_prev = obj_prev
-    # v.β .= soft_threshold.(v.β .+ v.σ .* v.grad, v.λ)
 end
 
 
