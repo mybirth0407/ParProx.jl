@@ -202,14 +202,9 @@ end
 Update one iteration of proximal gradient of the Cox regression
 """
 function one_iter!(u::COXUpdate, v::COXVariables)
-    # println(1/(2*power(v.X)^2))
-    # if v.σ < 1/(2*power(v.X)^2)
-    #     return
-    # end
-    
     shrinkage = 0.75
     converged, monitor_prev = get_objective!(u, v)
-    # monitor_prev[1]: objective function value befor updated parameters
+    # monitor_prev[1]: objective function value before parameters update
     g_x = monitor_prev[1] + value(v.penalty, v.β) # value: groupnorm penalty
     obj_prev = v.obj_prev
     copyto!(v.β_prev, v.β) # v.beta_prev = v.beta
