@@ -204,7 +204,7 @@ Update one iteration of proximal gradient of the Cox regression
 function one_iter!(u::COXUpdate, v::COXVariables)
     shrinkage = 0.75
     converged, monitor_prev = get_objective!(u, v)
-    # monitor_prev[1]: objective function value + penalty
+    # monitor_prev[1]: objective function value - penalty
     g_x = monitor_prev[1] + value(v.penalty, v.β) # value: groupnorm penalty
     obj_prev = v.obj_prev
     copyto!(v.β_prev, v.β) # v.beta_prev = v.beta
@@ -218,7 +218,7 @@ function one_iter!(u::COXUpdate, v::COXVariables)
     
     while true
         converged, monitor = get_objective!(u, v)
-        g_x_plus = monitor[1] + value(v.penalty, v.β) - dot(grad_prev, (v.β .- v.β_prev)) / size(v.β, 1) - 1/(2*v.σ) * norm(v.β .- v.β_prev)^2 / size(v.β, 1) # monitor[1]: objective function value + penalty
+        g_x_plus = monitor[1] + value(v.penalty, v.β) - dot(grad_prev, (v.β .- v.β_prev)) / size(v.β, 1) - 1/(2*v.σ) * norm(v.β .- v.β_prev)^2 / size(v.β, 1) # monitor[1]: objective function value - penalty
         
         if g_x_plus > g_x # g(x_plus) is good value
             break
